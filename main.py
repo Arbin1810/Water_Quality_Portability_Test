@@ -49,7 +49,7 @@ print(water_df)
 import streamlit as st
 
 # Set page config for wider displaying
-st.set_page_config(page_title="Water Data Analysis", layout="wide")
+st.set_page_config(page_title="Water Data Analysis by Arbind", layout="wide")
 
 # Display the data
 st.title("Water Quality Analysis Dashboard")
@@ -528,8 +528,8 @@ print(f"Recall Score is :{recall_score_value} ")
 
 
 water_type_mapping = {
-    0: "🚫 **Not-Potable (Unsafe to drink)**",
-    1: "✅ **Potable (Safe to drink)**"
+    0: "Not-Potable (Unsafe to drink)",
+    1: "Potable (Safe to drink)"
 }
 st.write("Enter water quality parameters:")
 
