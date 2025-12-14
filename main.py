@@ -1,6 +1,6 @@
 #Reading the datasets
 import pandas as pd
-file_path = r'D:\DataScience Final Project\Water_Quality_Portability\water_quality_potability.csv'
+file_path = r'water_quality_potability.csv'
 water_df = pd.read_csv(file_path)
 # print(water_df.head())
 # print(water_df.tail())
