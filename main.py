@@ -56,6 +56,61 @@ st.title("Water Quality Analysis Dashboard")
 st.write(f"Dataset shape: {water_df.shape}")
 st.dataframe(water_df)
 
+# ============================================================================
+# 4. Train the different ML model for you problem and show barchart for their 
+#    accuracy metrics [KNN, SVC, Logistic Regression] 
+#    (best model after hyperparameter tuning) (In Streamlit Dashboard)
+# ============================================================================
+st.header("ML Model Comparison Results")
+
+# Import model comparison results from test.py
+try:
+    from test import compare_models
+    
+    # Run model comparison
+    results_df, scaler, models = compare_models()
+    
+    # Display results table
+    st.subheader("Model Performance Metrics")
+    st.dataframe(results_df)
+    
+    # Visualization of model comparison
+    st.subheader("Model Comparison Visualization")
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Prepare data for bar chart
+    model_names = results_df['Model'].tolist()
+    metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+    
+    x = np.arange(len(model_names))
+    width = 0.2
+    
+    for i, metric in enumerate(metrics):
+        values = results_df[metric].tolist()
+        ax.bar(x + i*width, values, width, label=metric)
+    
+    ax.set_xlabel('Models')
+    ax.set_ylabel('Score (%)')
+    ax.set_title('Model Performance Comparison')
+    ax.set_xticks(x + width*1.5)
+    ax.set_xticklabels(model_names)
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+    
+    # Show best model
+    best_model = results_df.loc[results_df['Recall'].idxmax()]
+    st.success(f"**Best Model**: {best_model['Model']} with Recall Score: {best_model['Recall']}%")
+    
+except ImportError:
+    st.warning("test.py not found. Please ensure test.py is in the same directory.")
+except Exception as e:
+    st.error(f"Error loading model comparison: {e}")
+
+
 
 
 
@@ -432,108 +487,19 @@ with col2:
     st.pyplot(fig2)
     
 
-
-
-#4. Train the different ML model for you problem and show barchart for their accuracy metrics [KNN, SVC, Logistic Regrssion] (best model after hyperparameter tuning) (In Streamlit Dashboard)
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-
-feature_names = ['ph', 'Hardness', 'Solids', 'Chloramines', 'Sulfate', 
-                 'Conductivity', 'Organic_carbon', 'Trihalomethanes', 'Turbidity']
-
-X = water_df[feature_names]
-y = water_df['Potability']
-print(feature_names)
-
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
-X_train, X_test,y_train,y_test = train_test_split(X_scaled,y,test_size=0.2,stratify=y)
-
-#A. Knn model
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import recall_score
-#tuning hyper-parameter by grid search cross validation because we have smaller dataset
-# model = KNeighborsClassifier()
-# parameter_grid = {
-#     "n_neighbors" : range(2,21),
-#     "weights": ["uniform","distance"],
-#     "metric":["euclidean","manhattan"]
-# }
-# grid_search = GridSearchCV(model, parameter_grid, cv=5, scoring="recall")
-# grid_search.fit(X_scaled,y)
-# print(grid_search.best_score_)
-# print(grid_search.best_params_)
-
-#0.8677313664224011 {'metric': 'manhattan', 'n_neighbors': 17, 'weights': 'distance'} so our hyperparameter should be 17
-
-# model= KNeighborsClassifier(n_neighbors=17)
-# model.fit(X_train,y_train)
-# y_pred = model.predict(X_test)
-
-# recall_score_value = recall_score(y_test, y_pred)
-# print(f"Recall Score is :{recall_score_value} ")
-#Recall Score is :0.8581314878892734 
-
-
-#B. Svm model
-from sklearn.svm import SVC 
-
-model = SVC(random_state=42)
-# parameter_grid = {
-#     "C": [0.1, 1, 10, 100],  # Regularization parameter
-#     "kernel": ["linear", "rbf", "poly", "sigmoid"],  # Kernel type
-#     "gamma": ["scale", "auto", 0.1, 0.01, 0.001],  # Kernel coefficient
-#     "degree": [2, 3, 4, 5],  # Degree for poly kernel (only used when kernel='poly')
-# } this standard parameters took a lot of time to display the output so i eradicated its value
-
-parameter_grid = {
-    "C": [0.1, 1, 10],  # Reduced from 4 to 3
-    "kernel": ["linear", "rbf"],  # Removed poly, sigmoid (often less effective)
-    "gamma": ["scale", "auto"],  # Removed numeric values
-    # Removed degree entirely
-}
-# grid_search = GridSearchCV(model, parameter_grid, cv=5, scoring="recall")
-# grid_search.fit(X_scaled,y)
-# print(grid_search.best_score_)
-# print(grid_search.best_params_)
-#0.8716540005487319 {'C': 1, 'gamma': 'scale', 'kernel': 'rbf'}
-
-model = SVC(C=1,gamma='scale',kernel='rbf',random_state=42)
-model.fit(X_train,y_train)
-y_pred = model.predict(X_test)
-
-recall_score_value = recall_score(y_test, y_pred)
-print(f"Recall Score is :{recall_score_value} ")
-#Recall Score is :0.8719723183391004 
-
-#On comparing i found SVM model is better for my relevant data 
-#now on streamlit dashboard 
-# water_type_mapping = {
-#     0 : "Not-Portable (Unsafe to drink)",
-#     1 : "Portable (Safe to drink)"
-# }
-# user_input = input("Enter 'ph', 'Hardness', 'Solids', 'Chloramines', 'Sulfate', 'Conductivity', 'Organic_carbon', 'Trihalomethanes', 'Turbidity' values separated by comma :")
-# user_data_list = user_input.split(",")
-# user_data = map(float, user_data_list)
-
-# user_data = [list(map(float,user_data_list))]
-# new_data = np.array(user_data)
-
-# predicted_label = int(model.predict(new_data))
-# print(f"Your water type for given data is : {water_type_mapping.get(predicted_label)}")
-
-
-
+# ============================================================================
+# Water Potability Prediction Section
+# ============================================================================
+st.header(" Water Potability Predictor")
 
 water_type_mapping = {
     0: "Not-Potable (Unsafe to drink)",
     1: "Potable (Safe to drink)"
 }
-st.write("Enter water quality parameters:")
 
-#input fields
+st.write("Enter water quality parameters for prediction:")
+
+# Input fields
 col1, col2 = st.columns(2)
 
 with col1:
@@ -548,25 +514,47 @@ with col2:
     organic_carbon = st.number_input("Organic Carbon", min_value=0.0, value=14.3, step=0.1)
     trihalomethanes = st.number_input("Trihalomethanes", min_value=0.0, value=66.0, step=0.1)
     turbidity = st.number_input("Turbidity", min_value=0.0, value=3.9, step=0.1)
-    
+
 # Prediction button
-if st.button("🔍 Predict Water Potability", type="primary"):
-    # Prepare input data
-    user_data = [[ph, hardness, solids, chloramines, sulfate, 
-                  conductivity, organic_carbon, trihalomethanes, turbidity]]
-    
-    # Scale the input data (important for SVM)
-    user_data_scaled = scaler.transform(user_data)
-    
-    # Make prediction
-    predicted_label = int(model.predict(user_data_scaled)[0])
-    
-    # Display result
-    st.markdown("---")
-    st.subheader("Prediction Result")
-    
-    if predicted_label == 1:
-        st.success(water_type_mapping[predicted_label])
-    else:
-        st.error(water_type_mapping[predicted_label])
-    
+if st.button(" Predict Water Potability", type="primary"):
+    try:
+        # Prepare input data
+        user_data = [[ph, hardness, solids, chloramines, sulfate, 
+                      conductivity, organic_carbon, trihalomethanes, turbidity]]
+        
+        # Use the SVM model (best model from comparison)
+        feature_names = ['ph', 'Hardness', 'Solids', 'Chloramines', 'Sulfate', 
+                         'Conductivity', 'Organic_carbon', 'Trihalomethanes', 'Turbidity']
+        X = water_df[feature_names]
+        y = water_df['Potability']
+        
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.svm import SVC
+        from sklearn.model_selection import train_test_split
+        
+        # Scale features and train model
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, stratify=y)
+        
+        # Train SVM model with best parameters
+        model = SVC(C=1, gamma='scale', kernel='rbf', random_state=42)
+        model.fit(X_train, y_train)
+        
+        # Scale the input data
+        user_data_scaled = scaler.transform(user_data)
+        
+        # Make prediction
+        predicted_label = int(model.predict(user_data_scaled)[0])
+        
+        # Display result
+        st.markdown("---")
+        st.subheader("Prediction Result")
+        
+        if predicted_label == 1:
+            st.success(water_type_mapping[predicted_label])
+        else:
+            st.error(water_type_mapping[predicted_label])
+            
+    except Exception as e:
+        st.error(f"Error making prediction: {e}")
