@@ -65,56 +65,333 @@ st.header("ML Model Comparison Results")
 
 # Import model comparison results from test.py
 try:
-    from test import compare_models
+    from test import compare_models, train_single_model
     
-    # Run model comparison
-    results_df, scaler, models = compare_models()
+    # Initialize session state variables
+    if 'best_model' not in st.session_state:
+        st.session_state.best_model = None
+    if 'scaler' not in st.session_state:
+        st.session_state.scaler = None
+    if 'feature_names' not in st.session_state:
+        st.session_state.feature_names = None
+    if 'metrics_data' not in st.session_state:
+        st.session_state.metrics_data = None
+    if 'model_trained' not in st.session_state:
+        st.session_state.model_trained = False
+    if 'default_model_trained' not in st.session_state:
+        st.session_state.default_model_trained = False
+    if 'selected_model' not in st.session_state:
+        st.session_state.selected_model = 'SVM (Default)'
     
-    # Display results table
-    st.subheader("Model Performance Metrics")
-    st.dataframe(results_df)
+    # Prepare features and target for default training
+    feature_names = ['ph', 'Hardness', 'Solids', 'Chloramines', 'Sulfate', 
+                     'Conductivity', 'Organic_carbon', 'Trihalomethanes', 'Turbidity']
     
-    # Visualization of model comparison
-    st.subheader("Model Comparison Visualization")
+    st.session_state.feature_names = feature_names
     
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Train default SVM model on app startup (only once)
+    if not st.session_state.default_model_trained:
+        with st.spinner("Training default SVM model..."):
+            # Train SVM as default model
+            X = water_df[feature_names]
+            y = water_df['Potability']
+            
+            # Scale features
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.model_selection import train_test_split
+            
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+            
+            # Split data
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_scaled, y, test_size=0.2, stratify=y, random_state=42
+            )
+            
+            # Train SVM model with best parameters
+            from sklearn.svm import SVC
+            model = SVC(C=1, gamma='scale', kernel='rbf', random_state=42)
+            model.fit(X_train, y_train)
+            
+            # Make predictions and calculate metrics
+            y_pred = model.predict(X_test)
+            from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+            
+            accuracy = accuracy_score(y_test, y_pred)
+            precision = precision_score(y_test, y_pred)
+            recall = recall_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred)
+            
+            # Store in session state
+            st.session_state.metrics_data = {
+                'SVM': {
+                    'model': model,
+                    'accuracy': round(accuracy * 100, 2),
+                    'precision': round(precision * 100, 2),
+                    'recall': round(recall * 100, 2),
+                    'f1': round(f1 * 100, 2),
+                    'best_params': {'C': 1, 'gamma': 'scale', 'kernel': 'rbf'}
+                }
+            }
+            st.session_state.scaler = scaler
+            st.session_state.best_model = model
+            st.session_state.model_trained = True
+            st.session_state.default_model_trained = True
+            st.session_state.selected_model = 'SVM (Default)'
     
-    # Prepare data for bar chart
-    model_names = results_df['Model'].tolist()
-    metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+    # Create two tabs for training and prediction
+    tab1, tab2 = st.tabs(["Model Training", "Real-time Prediction"])
     
-    x = np.arange(len(model_names))
-    width = 0.2
+    with tab1:
+        st.subheader("Train Machine Learning Models")
+        
+        # Show default model status
+        if st.session_state.default_model_trained:
+            st.success("✓ Default SVM model trained automatically on startup")
+        
+        # Train all models button
+        if st.button("Train All Models", key="train_all_models"):
+            with st.spinner("Training all models..."):
+                results_df, scaler, models = compare_models()
+                
+                # Store in session state
+                st.session_state.metrics_data = {
+                    'KNN': {
+                        'model': models['KNN'],
+                        'accuracy': results_df[results_df['Model'] == 'KNN']['Accuracy'].values[0],
+                        'precision': results_df[results_df['Model'] == 'KNN']['Precision'].values[0],
+                        'recall': results_df[results_df['Model'] == 'KNN']['Recall'].values[0],
+                        'f1': results_df[results_df['Model'] == 'KNN']['F1-Score'].values[0],
+                        'best_params': {'n_neighbors': 17, 'metric': 'manhattan', 'weights': 'distance'}
+                    },
+                    'SVM': {
+                        'model': models['SVM'],
+                        'accuracy': results_df[results_df['Model'] == 'SVM']['Accuracy'].values[0],
+                        'precision': results_df[results_df['Model'] == 'SVM']['Precision'].values[0],
+                        'recall': results_df[results_df['Model'] == 'SVM']['Recall'].values[0],
+                        'f1': results_df[results_df['Model'] == 'SVM']['F1-Score'].values[0],
+                        'best_params': {'C': 1, 'gamma': 'scale', 'kernel': 'rbf'}
+                    },
+                    'Logistic Regression': {
+                        'model': models['Logistic Regression'],
+                        'accuracy': results_df[results_df['Model'] == 'Logistic Regression']['Accuracy'].values[0],
+                        'precision': results_df[results_df['Model'] == 'Logistic Regression']['Precision'].values[0],
+                        'recall': results_df[results_df['Model'] == 'Logistic Regression']['Recall'].values[0],
+                        'f1': results_df[results_df['Model'] == 'Logistic Regression']['F1-Score'].values[0],
+                        'best_params': {'max_iter': 1000}
+                    }
+                }
+                st.session_state.scaler = scaler
+                st.session_state.model_trained = True
+                
+                # Find and store the best model
+                best_model_row = results_df.loc[results_df['Recall'].idxmax()]
+                best_model_name = best_model_row['Model']
+                st.session_state.best_model = models[best_model_name]
+                st.session_state.selected_model = best_model_name
+                
+                st.success(f"All models trained successfully! Best model: {best_model_name}")
+        
+        # Train individual model buttons
+        st.subheader("Train Individual Models")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("Train KNN", key="train_knn"):
+                with st.spinner("Training KNN..."):
+                    # Call function to train only KNN
+                    model, scaler, metrics = train_single_model('KNN')
+                    if model:
+                        st.session_state.metrics_data['KNN'] = metrics['KNN']
+                        st.session_state.scaler = scaler
+                        st.session_state.model_trained = True
+                        st.session_state.best_model = model
+                        st.session_state.selected_model = 'KNN'
+                        st.success("KNN trained successfully!")
+        
+        with col2:
+            if st.button("Train SVM", key="train_svm"):
+                with st.spinner("Training SVM..."):
+                    # Call function to train only SVM
+                    model, scaler, metrics = train_single_model('SVM')
+                    if model:
+                        st.session_state.metrics_data['SVM'] = metrics['SVM']
+                        st.session_state.scaler = scaler
+                        st.session_state.model_trained = True
+                        st.session_state.best_model = model
+                        st.session_state.selected_model = 'SVM'
+                        st.success("SVM trained successfully!")
+        
+        with col3:
+            if st.button("Train Logistic Regression", key="train_lr"):
+                with st.spinner("Training Logistic Regression..."):
+                    # Call function to train only Logistic Regression
+                    model, scaler, metrics = train_single_model('Logistic Regression')
+                    if model:
+                        st.session_state.metrics_data['Logistic Regression'] = metrics['Logistic Regression']
+                        st.session_state.scaler = scaler
+                        st.session_state.model_trained = True
+                        st.session_state.best_model = model
+                        st.session_state.selected_model = 'Logistic Regression'
+                        st.success("Logistic Regression trained successfully!")
+        
+        # Display training results if models are trained
+        if st.session_state.model_trained and st.session_state.metrics_data:
+            st.subheader("Model Performance Metrics")
+            
+            # Create results DataFrame for display
+            results_list = []
+            for model_name, data in st.session_state.metrics_data.items():
+                results_list.append({
+                    'Model': model_name,
+                    'Accuracy': data['accuracy'],
+                    'Precision': data['precision'],
+                    'Recall': data['recall'],
+                    'F1-Score': data['f1']
+                })
+            
+            results_df = pd.DataFrame(results_list)
+            
+            # Display results table
+            st.dataframe(results_df)
+            
+            # Visualization of model comparison
+            st.subheader("Model Comparison Visualization")
+            
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            # Prepare data for bar chart
+            model_names = results_df['Model'].tolist()
+            metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+            
+            x = np.arange(len(model_names))
+            width = 0.2
+            
+            for i, metric in enumerate(metrics):
+                values = results_df[metric].tolist()
+                ax.bar(x + i*width, values, width, label=metric)
+            
+            ax.set_xlabel('Models')
+            ax.set_ylabel('Score (%)')
+            ax.set_title('Model Performance Comparison')
+            ax.set_xticks(x + width*1.5)
+            ax.set_xticklabels(model_names)
+            ax.legend()
+            ax.grid(True, alpha=0.3, axis='y')
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            # Display best parameters
+            st.subheader("Best Hyperparameters Found:")
+            for model_name, data in st.session_state.metrics_data.items():
+                st.write(f"**{model_name}:** {data['best_params']}")
+            
+            # Find and display best model
+            if len(st.session_state.metrics_data) > 0:
+                best_model_name = max(st.session_state.metrics_data.keys(), 
+                                    key=lambda x: st.session_state.metrics_data[x]['recall'])
+                st.subheader(f"Best Model: {best_model_name}")
+                st.write(f"**Recall Score:** {st.session_state.metrics_data[best_model_name]['recall']:.2f}%")
+        else:
+            if st.session_state.default_model_trained:
+                st.info("Default SVM model is trained. You can train other models using the buttons above.")
+            else:
+                st.info("No models trained yet. Click the buttons above to train models.")
     
-    for i, metric in enumerate(metrics):
-        values = results_df[metric].tolist()
-        ax.bar(x + i*width, values, width, label=metric)
-    
-    ax.set_xlabel('Models')
-    ax.set_ylabel('Score (%)')
-    ax.set_title('Model Performance Comparison')
-    ax.set_xticks(x + width*1.5)
-    ax.set_xticklabels(model_names)
-    ax.legend()
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    plt.tight_layout()
-    st.pyplot(fig)
-    
-    # Show best model
-    best_model = results_df.loc[results_df['Recall'].idxmax()]
-    st.success(f"**Best Model**: {best_model['Model']} with Recall Score: {best_model['Recall']}%")
+    with tab2:
+        st.subheader("Real-time Water Potability Prediction")
+        
+        if not st.session_state.model_trained or st.session_state.best_model is None:
+            st.warning("No model trained yet. Please train at least one model in the 'Model Training' tab first.")
+        else:
+            water_type_mapping = {
+                0: "Not-Potable (Unsafe to drink)",
+                1: "Potable (Safe to drink)"
+            }
+            
+            # Model selection for prediction
+            st.subheader("Select Model for Prediction")
+            
+            # Get available trained models
+            available_models = []
+            if st.session_state.metrics_data:
+                available_models = list(st.session_state.metrics_data.keys())
+            
+            if available_models:
+                # Add default label to SVM if it's the default
+                model_options = []
+                for model in available_models:
+                    if model == 'SVM' and st.session_state.default_model_trained and st.session_state.selected_model == 'SVM (Default)':
+                        model_options.append('SVM (Default)')
+                    else:
+                        model_options.append(model)
+                
+                selected_model_name = st.selectbox(
+                    "Choose model for prediction:",
+                    model_options,
+                    index=model_options.index(st.session_state.selected_model) if st.session_state.selected_model in model_options else 0
+                )
+                
+                # Update selected model
+                if selected_model_name != st.session_state.selected_model:
+                    # Extract actual model name without "(Default)" suffix
+                    actual_model_name = selected_model_name.replace(' (Default)', '')
+                    if actual_model_name in st.session_state.metrics_data:
+                        st.session_state.best_model = st.session_state.metrics_data[actual_model_name]['model']
+                        st.session_state.selected_model = selected_model_name
+                        st.rerun()
+            
+            st.write("Enter water quality parameters for prediction:")
+            
+            # Input fields
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                ph = st.number_input("pH", min_value=0.0, max_value=14.0, value=7.0, step=0.1)
+                hardness = st.number_input("Hardness", min_value=0.0, value=195.0, step=0.1)
+                solids = st.number_input("Solids", min_value=0.0, value=22000.0, step=10.0)
+                chloramines = st.number_input("Chloramines", min_value=0.0, value=7.1, step=0.1)
+                sulfate = st.number_input("Sulfate", min_value=0.0, value=330.0, step=1.0)
+            
+            with col2:
+                conductivity = st.number_input("Conductivity", min_value=0.0, value=420.0, step=1.0)
+                organic_carbon = st.number_input("Organic Carbon", min_value=0.0, value=14.3, step=0.1)
+                trihalomethanes = st.number_input("Trihalomethanes", min_value=0.0, value=66.0, step=0.1)
+                turbidity = st.number_input("Turbidity", min_value=0.0, value=3.9, step=0.1)
+            
+            # Prediction button
+            if st.button(" Predict Water Potability", type="primary"):
+                # Prepare input data
+                user_data = [[ph, hardness, solids, chloramines, sulfate, 
+                              conductivity, organic_carbon, trihalomethanes, turbidity]]
+                
+                # Scale the input data
+                user_data_scaled = st.session_state.scaler.transform(user_data)
+                
+                # Make prediction using selected model
+                predicted_label = int(st.session_state.best_model.predict(user_data_scaled)[0])
+                
+                # Display result
+                st.markdown("---")
+                st.subheader("Prediction Result")
+                
+                # Display which model is being used
+                st.info(f"Using: {st.session_state.selected_model}")
+                
+                if predicted_label == 1:
+                    st.success(water_type_mapping[predicted_label])
+                else:
+                    st.error(water_type_mapping[predicted_label])
     
 except ImportError:
     st.warning("test.py not found. Please ensure test.py is in the same directory.")
 except Exception as e:
     st.error(f"Error loading model comparison: {e}")
 
-
-
-
-
-
+# ============================================================================
+# Keep all your existing visualization code below (unchanged)
+# ============================================================================
 
 st.header("Interactive Plots")
 
@@ -163,10 +440,6 @@ with col2:
     ax2.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
     st.pyplot(fig2)
-
-
-
-
 
 col1, col2 = st.columns(2)
 
@@ -223,17 +496,8 @@ with col2:
     plt.tight_layout()
     st.pyplot(fig2)
 
-
-
-
-
-
-
-
-
 st.header("Other Sample Plots")
 st.header("Linecharts")
-
 
 col1, col2 = st.columns(2)
 with col1:
@@ -263,7 +527,6 @@ with col2:
     ax2.grid(True, alpha=0.3)
     plt.tight_layout()
     st.pyplot(fig2)
-    
 
 col3, col4 = st.columns(2)
 
@@ -306,11 +569,6 @@ with col4:
     plt.suptitle('Four Key Water Parameters', fontsize=11)
     plt.tight_layout()
     st.pyplot(fig4)
-    
-    
-    
-    
-    
     
 #Barcharts
 st.header("Barcharts")
@@ -356,16 +614,6 @@ with col2:
     plt.tight_layout()
     st.pyplot(fig2)
     
-    
-
-    
-    
-    
-    
-    
-    
-    
-    
 #Boxplots
 st.header("Boxplots")
 col1, col2 = st.columns(2)
@@ -391,14 +639,6 @@ with col2:
     ax2.set_title('pH by Potability Status')
     ax2.grid(True, alpha=0.3, axis='y')
     st.pyplot(fig2)
-    
-    
-
-    
-    
-    
-    
-    
     
 #Piecharts
 st.header("Piecharts")
@@ -445,11 +685,6 @@ with col2:
     plt.tight_layout()
     st.pyplot(fig2)
     
-    
-    
-    
-    
-    
 #Scatterplots
 st.header("Scatter plots")
 col1, col2 = st.columns(2)
@@ -485,76 +720,3 @@ with col2:
     ax2.grid(True, alpha=0.3)
     plt.tight_layout()
     st.pyplot(fig2)
-    
-
-# ============================================================================
-# Water Potability Prediction Section
-# ============================================================================
-st.header(" Water Potability Predictor")
-
-water_type_mapping = {
-    0: "Not-Potable (Unsafe to drink)",
-    1: "Potable (Safe to drink)"
-}
-
-st.write("Enter water quality parameters for prediction:")
-
-# Input fields
-col1, col2 = st.columns(2)
-
-with col1:
-    ph = st.number_input("pH", min_value=0.0, max_value=14.0, value=7.0, step=0.1)
-    hardness = st.number_input("Hardness", min_value=0.0, value=195.0, step=0.1)
-    solids = st.number_input("Solids", min_value=0.0, value=22000.0, step=10.0)
-    chloramines = st.number_input("Chloramines", min_value=0.0, value=7.1, step=0.1)
-    sulfate = st.number_input("Sulfate", min_value=0.0, value=330.0, step=1.0)
-
-with col2:
-    conductivity = st.number_input("Conductivity", min_value=0.0, value=420.0, step=1.0)
-    organic_carbon = st.number_input("Organic Carbon", min_value=0.0, value=14.3, step=0.1)
-    trihalomethanes = st.number_input("Trihalomethanes", min_value=0.0, value=66.0, step=0.1)
-    turbidity = st.number_input("Turbidity", min_value=0.0, value=3.9, step=0.1)
-
-# Prediction button
-if st.button(" Predict Water Potability", type="primary"):
-    try:
-        # Prepare input data
-        user_data = [[ph, hardness, solids, chloramines, sulfate, 
-                      conductivity, organic_carbon, trihalomethanes, turbidity]]
-        
-        # Use the SVM model (best model from comparison)
-        feature_names = ['ph', 'Hardness', 'Solids', 'Chloramines', 'Sulfate', 
-                         'Conductivity', 'Organic_carbon', 'Trihalomethanes', 'Turbidity']
-        X = water_df[feature_names]
-        y = water_df['Potability']
-        
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.svm import SVC
-        from sklearn.model_selection import train_test_split
-        
-        # Scale features and train model
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, stratify=y)
-        
-        # Train SVM model with best parameters
-        model = SVC(C=1, gamma='scale', kernel='rbf', random_state=42)
-        model.fit(X_train, y_train)
-        
-        # Scale the input data
-        user_data_scaled = scaler.transform(user_data)
-        
-        # Make prediction
-        predicted_label = int(model.predict(user_data_scaled)[0])
-        
-        # Display result
-        st.markdown("---")
-        st.subheader("Prediction Result")
-        
-        if predicted_label == 1:
-            st.success(water_type_mapping[predicted_label])
-        else:
-            st.error(water_type_mapping[predicted_label])
-            
-    except Exception as e:
-        st.error(f"Error making prediction: {e}")
